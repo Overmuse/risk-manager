@@ -1,0 +1,24 @@
+[package]
+name = "risk-manager"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+alpaca = {git = "ssh://git@github.com/Overmuse/alpaca.git", tag = "v0.9.0"}
+anyhow = "1.0"
+chrono = "0.4.19"
+config = "0.11"
+dotenv = "0.15"
+kafka-settings = {git = "ssh://git@github.com/Overmuse/kafka-settings.git", tag = "v0.3.3"}
+polygon = { git = "ssh://git@github.com/Overmuse/polygon", tag = "v0.11.2", default-features = false, features = ["ws"] }
+rdkafka = { version = "0.26", features = ["ssl-vendored"] }
+rust_decimal = "1.14"
+serde = "1.0"
+serde_json = "1.0"
+tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+tracing-subscriber = "0.2.20"
+trading-base = {git = "ssh://git@github.com/Overmuse/trading-base.git", tag = "v0.4.0" }
+uuid = "0.8.2"
