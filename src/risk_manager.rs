@@ -1,5 +1,6 @@
 use rdkafka::consumer::StreamConsumer;
 use rust_decimal::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use trading_base::{OrderType, TradeIntent};
 
@@ -9,10 +10,29 @@ pub struct Shares(pub Decimal);
 #[derive(Copy, Clone)]
 pub struct Price(pub Decimal);
 
+#[derive(Default)]
 pub struct RiskManager {
     pub(super) kafka_consumer: Option<StreamConsumer>,
     cash: Decimal,
-    holdings: HashMap<String, (Shares, Price, Price)>,
+    holdings: HashMap<String, (Shares, Price)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DenyReason {
+    InsufficientBuyingPower,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "result", rename_all = "snake_case")]
+pub enum RiskCheckResponse {
+    Granted {
+        intent: TradeIntent,
+    },
+    Denied {
+        intent: TradeIntent,
+        reason: DenyReason,
+    },
 }
 
 impl RiskManager {
@@ -35,25 +55,24 @@ impl RiskManager {
     pub fn update_price<T: ToString>(&mut self, ticker: T, price: Price) {
         self.holdings
             .entry(ticker.to_string())
-            .and_modify(|(_, _, p)| *p = price);
+            .and_modify(|(_, p)| *p = price);
     }
 
     pub fn update_holdings<T: ToString>(&mut self, ticker: T, shares: Shares, price: Price) {
         self.holdings
             .entry(ticker.to_string())
-            .and_modify(|(s, i, p)| {
+            .and_modify(|(s, p)| {
                 *s = shares;
-                *i = price;
                 *p = price
             })
-            .or_insert((shares, price, price));
+            .or_insert((shares, price));
     }
 
     pub fn long_market_exposure(&self) -> Decimal {
         self.holdings
             .values()
-            .filter(|(s, _, _)| s.0.is_sign_positive())
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .filter(|(s, _)| s.0.is_sign_positive())
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 state + shares.0 * price.0
             })
     }
@@ -61,8 +80,8 @@ impl RiskManager {
     pub fn short_market_exposure(&self) -> Decimal {
         self.holdings
             .values()
-            .filter(|(s, _, _)| s.0.is_sign_negative())
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .filter(|(s, _)| s.0.is_sign_negative())
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 state + -shares.0 * price.0
             })
     }
@@ -70,7 +89,7 @@ impl RiskManager {
     pub fn gross_market_exposure(&self) -> Decimal {
         self.holdings
             .values()
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 state + shares.0.abs() * price.0
             })
     }
@@ -78,7 +97,7 @@ impl RiskManager {
     pub fn net_market_exposure(&self) -> Decimal {
         self.holdings
             .values()
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 state + shares.0 * price.0
             })
     }
@@ -90,7 +109,7 @@ impl RiskManager {
     pub fn initial_margin(&self) -> Decimal {
         self.holdings
             .values()
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 state + shares.0.abs() * price.0 * Decimal::new(5, 1)
             })
     }
@@ -98,19 +117,17 @@ impl RiskManager {
     pub fn maintenance_margin(&self) -> Decimal {
         self.holdings
             .values()
-            .fold(Decimal::ZERO, |state, (shares, _, price)| {
+            .fold(Decimal::ZERO, |state, (shares, price)| {
                 let factor = if shares.0.is_sign_positive() {
                     if price.0 >= Decimal::new(25, 1) {
                         Decimal::new(3, 1)
                     } else {
                         Decimal::ONE
                     }
+                } else if price.0 >= Decimal::new(5, 0) {
+                    Decimal::new(3, 1)
                 } else {
-                    if price.0 >= Decimal::new(5, 0) {
-                        Decimal::new(3, 1)
-                    } else {
-                        Decimal::ONE
-                    }
+                    Decimal::ONE
                 };
                 state + shares.0.abs() * price.0 * factor
             })
@@ -120,7 +137,7 @@ impl RiskManager {
         (self.total_equity() - self.initial_margin()) * Decimal::new(2, 0)
     }
 
-    pub fn risk_check(&self, trade_intent: TradeIntent) -> bool {
+    pub fn risk_check(&self, trade_intent: &TradeIntent) -> RiskCheckResponse {
         let required_buying_power = match trade_intent.order_type {
             OrderType::Limit { limit_price } => {
                 limit_price * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
@@ -128,7 +145,16 @@ impl RiskManager {
             _ => todo!(),
         };
 
-        self.buying_power() > required_buying_power
+        if self.buying_power() > required_buying_power {
+            RiskCheckResponse::Granted {
+                intent: trade_intent.clone(),
+            }
+        } else {
+            RiskCheckResponse::Denied {
+                intent: trade_intent.clone(),
+                reason: DenyReason::InsufficientBuyingPower,
+            }
+        }
     }
 }
 
@@ -173,11 +199,24 @@ mod test {
         let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
             limit_price: Decimal::new(200, 0),
         });
-        assert!(manager.risk_check(trade_intent));
+        let response = manager.risk_check(&trade_intent);
+        assert_eq!(
+            response,
+            RiskCheckResponse::Granted {
+                intent: trade_intent
+            }
+        );
 
         let trade_intent = TradeIntent::new("AAPL", -1).order_type(OrderType::Limit {
             limit_price: Decimal::new(230, 0),
         });
-        assert!(!manager.risk_check(trade_intent));
+        let response = manager.risk_check(&trade_intent);
+        assert_eq!(
+            response,
+            RiskCheckResponse::Denied {
+                intent: trade_intent,
+                reason: DenyReason::InsufficientBuyingPower
+            }
+        );
     }
 }
