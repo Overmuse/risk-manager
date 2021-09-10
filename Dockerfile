@@ -1,4 +1,4 @@
-FROM rust as planner
+FROM rust:1.54 as planner
 WORKDIR app
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
@@ -10,13 +10,13 @@ COPY . .
 
 RUN cargo chef prepare  --recipe-path recipe.json
 
-FROM rust as cacher
+FROM rust:1.54 as cacher
 WORKDIR app
 RUN cargo install cargo-chef
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=ssh cargo chef cook --release --recipe-path recipe.json
 
-FROM rust as builder
+FROM rust:1.54 as builder
 WORKDIR app
 COPY . .
 # Copy over the cached dependencies
