@@ -20,7 +20,7 @@ pub struct RiskManager {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DenyReason {
-    InsufficientBuyingPower,
+    InsufficientBuyingPower { buying_power: Decimal },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -144,15 +144,16 @@ impl RiskManager {
             }
             _ => todo!(),
         };
+        let buying_power = self.buying_power();
 
-        if self.buying_power() > required_buying_power {
+        if buying_power > required_buying_power {
             RiskCheckResponse::Granted {
                 intent: trade_intent.clone(),
             }
         } else {
             RiskCheckResponse::Denied {
                 intent: trade_intent.clone(),
-                reason: DenyReason::InsufficientBuyingPower,
+                reason: DenyReason::InsufficientBuyingPower { buying_power },
             }
         }
     }
@@ -215,7 +216,9 @@ mod test {
             response,
             RiskCheckResponse::Denied {
                 intent: trade_intent,
-                reason: DenyReason::InsufficientBuyingPower
+                reason: DenyReason::InsufficientBuyingPower {
+                    buying_power: Decimal::new(220, 0)
+                }
             }
         );
     }
