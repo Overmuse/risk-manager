@@ -3,13 +3,7 @@ use kafka_settings::KafkaSettings;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct AppSettings {
-    pub order_manager_url: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct Settings {
-    pub app: AppSettings,
     pub kafka: KafkaSettings,
 }
 

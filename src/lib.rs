@@ -1,7 +1,7 @@
 mod input;
 mod risk_manager;
 mod settings;
-pub use crate::risk_manager::{Price, RiskManager, Shares};
+pub use crate::risk_manager::{DenyReason, Price, RiskCheckResponse, RiskManager, Shares};
 use anyhow::{anyhow, Result};
 use kafka_settings::{consumer, producer};
 use rdkafka::producer::FutureRecord;
@@ -21,7 +21,7 @@ pub async fn run(settings: Settings) -> Result<()> {
             input::Input::TradeIntent(trade_intent) => {
                 let response = risk_manager.risk_check(&trade_intent);
                 let payload = serde_json::to_string(&response)?;
-                let record = FutureRecord::to("risk")
+                let record = FutureRecord::to("risk-check-response")
                     .key(&trade_intent.ticker)
                     .payload(&payload);
                 producer
