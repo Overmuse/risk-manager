@@ -31,7 +31,8 @@ impl RiskManager {
     pub async fn receive_message(&mut self) -> Result<Input> {
         match self.kafka_consumer.as_ref() {
             Some(consumer) => {
-                let message = consumer.recv().await?;
+                let message = consumer.recv().await;
+                let message = message?;
                 debug!("Message received from kafka");
                 let payload = message.payload().ok_or_else(|| anyhow!("Empty payload"))?;
                 Ok(serde_json::from_slice(payload)?)

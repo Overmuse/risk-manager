@@ -1,7 +1,10 @@
+use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
+use anyhow::{anyhow, Result};
 use rdkafka::consumer::StreamConsumer;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::{debug, trace};
 use trading_base::{OrderType, TradeIntent};
 
 #[derive(Copy, Clone)]
@@ -13,6 +16,7 @@ pub struct Price(pub Decimal);
 #[derive(Default)]
 pub struct RiskManager {
     pub(super) kafka_consumer: Option<StreamConsumer>,
+    alpaca_client: Option<Client>,
     cash: Decimal,
     holdings: HashMap<String, (Shares, Price)>,
 }
@@ -39,26 +43,62 @@ impl RiskManager {
     pub fn new() -> Self {
         Self {
             kafka_consumer: None,
+            alpaca_client: None,
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
         }
+    }
+
+    pub async fn initialize(&mut self) -> Result<()> {
+        if let Some(client) = self.alpaca_client.as_ref() {
+            let account = client.send(GetAccount).await?;
+            let holdings = client
+                .send(GetPositions)
+                .await?
+                .into_iter()
+                .map(|pos| {
+                    let shares = Decimal::from_i32(pos.qty).unwrap();
+                    (pos.symbol, (Shares(shares), Price(pos.avg_entry_price)))
+                })
+                .collect();
+            self.cash = account.cash;
+            self.holdings = holdings;
+            Ok(())
+        } else {
+            Err(anyhow!("Alpaca client not initialized"))
+        }
+    }
+
+    pub fn bind_alpaca_client(&mut self, client: Client) {
+        self.alpaca_client = Some(client)
     }
 
     pub fn bind_consumer(&mut self, consumer: StreamConsumer) {
         self.kafka_consumer = Some(consumer)
     }
 
+    #[tracing::instrument(skip(self, cash))]
     pub fn update_cash(&mut self, cash: Decimal) {
+        trace!(%cash, "Updating cash");
         self.cash = cash
     }
 
-    pub fn update_price<T: ToString>(&mut self, ticker: T, price: Price) {
+    #[tracing::instrument(skip(self, ticker, price))]
+    pub fn update_price<T: ToString + std::fmt::Display>(&mut self, ticker: T, price: Price) {
+        trace!(%ticker, price = %price.0, "Updating price");
         self.holdings
             .entry(ticker.to_string())
             .and_modify(|(_, p)| *p = price);
     }
 
-    pub fn update_holdings<T: ToString>(&mut self, ticker: T, shares: Shares, price: Price) {
+    #[tracing::instrument(skip(self, ticker, shares, price))]
+    pub fn update_holdings<T: ToString + std::fmt::Display>(
+        &mut self,
+        ticker: T,
+        shares: Shares,
+        price: Price,
+    ) {
+        trace!(%ticker, shares = %shares.0, price = %price.0, "Updating holdings");
         self.holdings
             .entry(ticker.to_string())
             .and_modify(|(s, p)| {
@@ -137,7 +177,9 @@ impl RiskManager {
         (self.total_equity() - self.initial_margin()) * Decimal::new(2, 0)
     }
 
+    #[tracing::instrument(skip(self, trade_intent), fields(id = %trade_intent.id))]
     pub fn risk_check(&self, trade_intent: &TradeIntent) -> RiskCheckResponse {
+        debug!("Running risk_check");
         let required_buying_power = match trade_intent.order_type {
             OrderType::Limit { limit_price } => {
                 limit_price * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
@@ -147,10 +189,12 @@ impl RiskManager {
         let buying_power = self.buying_power();
 
         if buying_power > required_buying_power {
+            debug!("Risk-check granted");
             RiskCheckResponse::Granted {
                 intent: trade_intent.clone(),
             }
         } else {
+            debug!("Risk-check denied");
             RiskCheckResponse::Denied {
                 intent: trade_intent.clone(),
                 reason: DenyReason::InsufficientBuyingPower { buying_power },

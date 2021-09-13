@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-alpaca = {git = "ssh://git@github.com/Overmuse/alpaca.git", tag = "v0.9.0"}
+alpaca = {git = "ssh://git@github.com/Overmuse/alpaca.git", tag = "v0.10.1"}
 anyhow = "1.0"
 chrono = "0.4.19"
 config = "0.11"
@@ -22,3 +22,6 @@ tracing = "0.1"
 tracing-subscriber = "0.2.20"
 trading-base = {git = "ssh://git@github.com/Overmuse/trading-base.git", tag = "v0.4.0" }
 uuid = "0.8.2"
+
+[dev-dependencies]
+mockito = "0.30.0"
