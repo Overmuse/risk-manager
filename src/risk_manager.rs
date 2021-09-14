@@ -187,12 +187,10 @@ impl RiskManager {
             } else {
                 Decimal::new(4, 0)
             }
+        } else if equity > Decimal::new(25000, 0) {
+            Decimal::new(2, 0)
         } else {
-            if equity > Decimal::new(25000, 0) {
-                Decimal::new(2, 0)
-            } else {
-                Decimal::new(1, 0)
-            }
+            Decimal::new(1, 0)
         }
     }
 

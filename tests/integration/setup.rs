@@ -109,9 +109,9 @@ pub async fn setup() -> (
         std::env::set_var("KAFKA__ACKS", "0");
         std::env::set_var("KAFKA__RETRIES", "0");
         std::env::set_var("WEBSERVER__PORT", "0");
-        std::env::set_var("APCA_API_BASE_URL", mockito::server_url());
-        std::env::set_var("APCA_API_KEY_ID", "APCA_API_KEY_ID");
-        std::env::set_var("APCA_API_SECRET_KEY", "APCA_API_SECRET_KEY");
+        std::env::set_var("ALPACA__BASE_URL", mockito::server_url());
+        std::env::set_var("ALPACA__KEY_ID", "APCA_API_KEY_ID");
+        std::env::set_var("ALPACA__SECRET_KEY", "APCA_API_SECRET_KEY");
         let settings = Settings::new();
         tracing::debug!("{:?}", settings);
         let res = run(settings.unwrap()).await;

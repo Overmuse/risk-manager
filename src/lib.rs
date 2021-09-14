@@ -14,7 +14,11 @@ pub async fn run(settings: Settings) -> Result<()> {
     info!("Running RiskManager");
     let consumer = consumer(&settings.kafka)?;
     let producer = producer(&settings.kafka)?;
-    let client = Client::from_env()?;
+    let client = Client::new(
+        settings.alpaca.base_url,
+        settings.alpaca.key_id,
+        settings.alpaca.secret_key,
+    )?;
     let mut risk_manager = RiskManager::new();
     risk_manager.bind_consumer(consumer);
     risk_manager.bind_alpaca_client(client);

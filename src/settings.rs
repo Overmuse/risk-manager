@@ -3,7 +3,15 @@ use kafka_settings::KafkaSettings;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+pub struct AlpacaSettings {
+    pub base_url: String,
+    pub key_id: String,
+    pub secret_key: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Settings {
+    pub alpaca: AlpacaSettings,
     pub kafka: KafkaSettings,
 }
 
