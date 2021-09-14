@@ -3,12 +3,12 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use rdkafka::Message;
 use rust_decimal::Decimal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::debug;
 use trading_base::TradeIntent;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Input {
@@ -16,7 +16,7 @@ pub enum Input {
     TradeIntent(TradeIntent),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Lot {
     pub id: Uuid,
     pub order_id: Uuid,

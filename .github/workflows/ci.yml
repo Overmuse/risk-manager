@@ -113,8 +113,6 @@ jobs:
           toolchain: stable
       - name: Initiate kafka
         run: ./scripts/init_kafka.sh
-      - name: Initiate postgres
-        run: ./scripts/init_db.sh
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --version 0.18.0-alpha3
       - name: Generate coverage

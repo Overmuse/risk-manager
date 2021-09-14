@@ -4,6 +4,7 @@ mod settings;
 pub use crate::risk_manager::{DenyReason, Price, RiskCheckResponse, RiskManager, Shares};
 use alpaca::Client;
 use anyhow::{anyhow, Result};
+pub use input::Lot;
 use kafka_settings::{consumer, producer};
 use rdkafka::producer::FutureRecord;
 pub use settings::Settings;

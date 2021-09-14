@@ -1,10 +1,12 @@
+use chrono::Utc;
 use rdkafka::producer::FutureRecord;
 use rdkafka::Message;
-use risk_manager::{DenyReason, RiskCheckResponse};
+use risk_manager::{DenyReason, Lot, RiskCheckResponse};
 use rust_decimal::Decimal;
 use setup::setup;
 use teardown::teardown;
 use trading_base::{OrderType, TradeIntent};
+use uuid::Uuid;
 mod setup;
 mod teardown;
 
@@ -26,13 +28,28 @@ async fn main() {
         .await
         .map_err(|(e, _)| e)
         .unwrap();
-
     let response = consumer.recv().await.unwrap();
     let message: RiskCheckResponse = serde_json::from_slice(&response.payload().unwrap()).unwrap();
     assert_eq!(message, RiskCheckResponse::Granted { intent });
 
+    let lot = Lot {
+        id: Uuid::new_v4(),
+        order_id: Uuid::new_v4(),
+        ticker: "AAPL".into(),
+        fill_time: Utc::now(),
+        shares: Decimal::new(2, 0),
+        price: Decimal::new(100, 0),
+    };
+    let payload = serde_json::to_string(&lot).unwrap();
+    let record = FutureRecord::to("lots").key(&lot.ticker).payload(&payload);
+    producer
+        .send(record, std::time::Duration::from_secs(0))
+        .await
+        .map_err(|(e, _)| e)
+        .unwrap();
+
     tracing::info!("Test 2");
-    let intent = TradeIntent::new("AAPL", 20001).order_type(OrderType::Limit {
+    let intent = TradeIntent::new("AAPL", 20000).order_type(OrderType::Limit {
         limit_price: Decimal::new(100, 0),
     });
     let payload = serde_json::to_string(&intent).unwrap();
@@ -52,7 +69,7 @@ async fn main() {
         RiskCheckResponse::Denied {
             intent,
             reason: DenyReason::InsufficientBuyingPower {
-                buying_power: Decimal::new(2000000, 0)
+                buying_power: Decimal::new(1999800, 0)
             }
         }
     );

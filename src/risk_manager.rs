@@ -19,6 +19,7 @@ pub struct RiskManager {
     alpaca_client: Option<Client>,
     cash: Decimal,
     holdings: HashMap<String, (Shares, Price)>,
+    is_pattern_day_trader: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -46,6 +47,7 @@ impl RiskManager {
             alpaca_client: None,
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
+            is_pattern_day_trader: false,
         }
     }
 
@@ -63,6 +65,7 @@ impl RiskManager {
                 .collect();
             self.cash = account.cash;
             self.holdings = holdings;
+            self.is_pattern_day_trader = account.pattern_day_trader;
             Ok(())
         } else {
             Err(anyhow!("Alpaca client not initialized"))
@@ -106,6 +109,7 @@ impl RiskManager {
                 *p = price
             })
             .or_insert((shares, price));
+        self.cash -= shares.0 * price.0;
     }
 
     pub fn long_market_exposure(&self) -> Decimal {
@@ -142,7 +146,7 @@ impl RiskManager {
             })
     }
 
-    pub fn total_equity(&self) -> Decimal {
+    pub fn equity(&self) -> Decimal {
         self.net_market_exposure() + self.cash
     }
 
@@ -173,8 +177,27 @@ impl RiskManager {
             })
     }
 
+    pub fn multiplier(&self) -> Decimal {
+        let equity = self.equity();
+        if self.is_pattern_day_trader {
+            if equity < Decimal::new(2000, 0) {
+                Decimal::ONE
+            } else if equity < Decimal::new(25000, 0) {
+                Decimal::new(2, 0)
+            } else {
+                Decimal::new(4, 0)
+            }
+        } else {
+            if equity > Decimal::new(25000, 0) {
+                Decimal::new(2, 0)
+            } else {
+                Decimal::new(1, 0)
+            }
+        }
+    }
+
     pub fn buying_power(&self) -> Decimal {
-        (self.total_equity() - self.initial_margin()) * Decimal::new(2, 0)
+        (self.equity() - self.initial_margin()) * self.multiplier()
     }
 
     #[tracing::instrument(skip(self, trade_intent), fields(id = %trade_intent.id))]
@@ -209,7 +232,13 @@ mod test {
 
     #[test]
     fn equity_calculations() {
-        let mut manager = RiskManager::new();
+        let mut manager = RiskManager {
+            kafka_consumer: None,
+            alpaca_client: None,
+            cash: Decimal::ZERO,
+            holdings: HashMap::new(),
+            is_pattern_day_trader: true,
+        };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
         manager.update_holdings(
@@ -223,15 +252,21 @@ mod test {
         assert_eq!(manager.short_market_exposure(), Decimal::new(160, 0));
         assert_eq!(manager.gross_market_exposure(), Decimal::new(260, 0));
         assert_eq!(manager.net_market_exposure(), Decimal::new(-60, 0));
-        assert_eq!(manager.total_equity(), Decimal::new(240, 0));
+        assert_eq!(manager.equity(), Decimal::new(240, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(130, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(78, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(220, 0));
+        assert_eq!(manager.buying_power(), Decimal::new(110, 0));
     }
 
     #[test]
     fn risk_check() {
-        let mut manager = RiskManager::new();
+        let mut manager = RiskManager {
+            kafka_consumer: None,
+            alpaca_client: None,
+            cash: Decimal::ZERO,
+            holdings: HashMap::new(),
+            is_pattern_day_trader: true,
+        };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
         manager.update_holdings(
@@ -242,7 +277,7 @@ mod test {
         manager.update_cash(Decimal::new(300, 0));
 
         let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
-            limit_price: Decimal::new(200, 0),
+            limit_price: Decimal::new(100, 0),
         });
         let response = manager.risk_check(&trade_intent);
         assert_eq!(
@@ -253,7 +288,7 @@ mod test {
         );
 
         let trade_intent = TradeIntent::new("AAPL", -1).order_type(OrderType::Limit {
-            limit_price: Decimal::new(230, 0),
+            limit_price: Decimal::new(120, 0),
         });
         let response = manager.risk_check(&trade_intent);
         assert_eq!(
@@ -261,7 +296,7 @@ mod test {
             RiskCheckResponse::Denied {
                 intent: trade_intent,
                 reason: DenyReason::InsufficientBuyingPower {
-                    buying_power: Decimal::new(220, 0)
+                    buying_power: Decimal::new(110, 0)
                 }
             }
         );
