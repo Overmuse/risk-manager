@@ -1,3 +1,4 @@
+use crate::redis::Redis;
 use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
 use anyhow::{anyhow, Result};
 use rdkafka::consumer::StreamConsumer;
@@ -20,6 +21,7 @@ pub struct RiskManager {
     cash: Decimal,
     holdings: HashMap<String, (Shares, Price)>,
     is_pattern_day_trader: bool,
+    redis: Option<Redis>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -48,6 +50,7 @@ impl RiskManager {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: false,
+            redis: None,
         }
     }
 
@@ -78,6 +81,10 @@ impl RiskManager {
 
     pub fn bind_consumer(&mut self, consumer: StreamConsumer) {
         self.kafka_consumer = Some(consumer)
+    }
+
+    pub fn bind_redis(&mut self, redis: Redis) {
+        self.redis = Some(redis)
     }
 
     #[tracing::instrument(skip(self, cash))]
@@ -205,7 +212,17 @@ impl RiskManager {
             OrderType::Limit { limit_price } => {
                 limit_price * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
             }
-            _ => todo!(),
+            OrderType::Market => {
+                let price = self
+                    .redis
+                    .as_ref()
+                    .expect("Redis client not bound")
+                    .get_latest_price(&trade_intent.ticker)
+                    .expect("Failed to get latest price")
+                    .expect("Missing price");
+                price * Decimal::new(103, 2) * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
+            }
+            _ => unimplemented!(),
         };
         let buying_power = self.buying_power();
 
@@ -236,6 +253,7 @@ mod test {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
+            redis: None,
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
@@ -264,6 +282,7 @@ mod test {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
+            redis: None,
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));

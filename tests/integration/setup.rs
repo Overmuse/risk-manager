@@ -108,6 +108,7 @@ pub async fn setup() -> (
         std::env::set_var("KAFKA__SECURITY_PROTOCOL", "PLAINTEXT");
         std::env::set_var("KAFKA__ACKS", "0");
         std::env::set_var("KAFKA__RETRIES", "0");
+        std::env::set_var("REDIS__URL", "redis://localhost:6379");
         std::env::set_var("WEBSERVER__PORT", "0");
         std::env::set_var("ALPACA__BASE_URL", mockito::server_url());
         std::env::set_var("ALPACA__KEY_ID", "APCA_API_KEY_ID");
