@@ -1,6 +1,7 @@
 use crate::redis::Redis;
 use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
 use anyhow::{anyhow, Result};
+use num_traits::sign::Signed;
 use rdkafka::consumer::StreamConsumer;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -208,6 +209,20 @@ impl RiskManager {
     #[tracing::instrument(skip(self, trade_intent), fields(id = %trade_intent.id))]
     pub fn risk_check(&self, trade_intent: &TradeIntent) -> RiskCheckResponse {
         debug!("Running risk_check");
+        let owned_shares = self.holdings.get(&trade_intent.ticker);
+        if let Some((shares, _)) = owned_shares {
+            if Decimal::from_isize(trade_intent.qty)
+                .expect("Failed to convert isize to Decimal")
+                .signum()
+                * shares.0.signum()
+                == Decimal::new(-1, 0)
+            {
+                // This is a closing trade, which should always be granted
+                return RiskCheckResponse::Granted {
+                    intent: trade_intent.clone(),
+                };
+            }
+        }
         let required_buying_power = match trade_intent.order_type {
             OrderType::Limit { limit_price } => {
                 limit_price * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
@@ -304,7 +319,7 @@ mod test {
             }
         );
 
-        let trade_intent = TradeIntent::new("AAPL", -1).order_type(OrderType::Limit {
+        let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
             limit_price: Decimal::new(120, 0),
         });
         let response = manager.risk_check(&trade_intent);
@@ -315,6 +330,17 @@ mod test {
                 reason: DenyReason::InsufficientBuyingPower {
                     buying_power: Decimal::new(110, 0)
                 }
+            }
+        );
+
+        let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
+            limit_price: Decimal::new(-120, 0),
+        });
+        let response = manager.risk_check(&trade_intent);
+        assert_eq!(
+            response,
+            RiskCheckResponse::Granted {
+                intent: trade_intent,
             }
         );
     }
