@@ -23,6 +23,8 @@ pub struct RiskManager {
     holdings: HashMap<String, (Shares, Price)>,
     is_pattern_day_trader: bool,
     redis: Option<Redis>,
+    last_equity: Decimal,
+    last_maintenance_margin: Decimal,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -53,6 +55,8 @@ impl RiskManager {
             holdings: HashMap::new(),
             is_pattern_day_trader: false,
             redis: None,
+            last_equity: Decimal::ZERO,
+            last_maintenance_margin: Decimal::ZERO,
         }
     }
 
@@ -71,6 +75,8 @@ impl RiskManager {
             self.cash = account.cash;
             self.holdings = holdings;
             self.is_pattern_day_trader = account.pattern_day_trader;
+            self.last_equity = account.last_equity;
+            self.last_maintenance_margin = account.last_maintenance_margin;
             Ok(())
         } else {
             Err(anyhow!("Alpaca client not initialized"))
@@ -203,8 +209,18 @@ impl RiskManager {
         }
     }
 
+    pub fn regt_buying_power(&self) -> Decimal {
+        ((self.equity() - self.initial_margin()) * self.multiplier()).max(Decimal::ZERO)
+    }
+
+    pub fn daytrading_buying_power(&self) -> Decimal {
+        ((self.last_equity - self.last_maintenance_margin) * self.multiplier()
+            - self.gross_market_exposure())
+        .max(Decimal::ZERO)
+    }
+
     pub fn buying_power(&self) -> Decimal {
-        (self.equity() - self.initial_margin()) * self.multiplier()
+        self.regt_buying_power().max(self.daytrading_buying_power())
     }
 
     #[tracing::instrument(skip(self, trade_intent), fields(id = %trade_intent.id))]
@@ -266,6 +282,70 @@ mod test {
     use super::*;
 
     #[test]
+    fn equity_calculations2() {
+        let mut manager = RiskManager {
+            kafka_consumer: None,
+            alpaca_client: None,
+            cash: Decimal::ZERO,
+            holdings: HashMap::new(),
+            is_pattern_day_trader: true,
+            redis: None,
+            last_equity: Decimal::new(99791448, 2),
+            last_maintenance_margin: Decimal::ZERO,
+        };
+
+        manager.update_holdings(
+            "TRP",
+            Shares(Decimal::new(5118, 0)),
+            Price(Decimal::new(4869, 2)),
+        );
+        manager.update_holdings(
+            "MPLX",
+            Shares(Decimal::new(8825, 0)),
+            Price(Decimal::new(2812, 2)),
+        );
+        manager.update_holdings(
+            "E",
+            Shares(Decimal::new(19539, 0)),
+            Price(Decimal::new(2556, 2)),
+        );
+        manager.update_holdings(
+            "DVN",
+            Shares(Decimal::new(-8146, 0)),
+            Price(Decimal::new(3058, 2)),
+        );
+        manager.update_holdings(
+            "CVE",
+            Shares(Decimal::new(-27716, 0)),
+            Price(Decimal::new(910, 2)),
+        );
+        manager.update_holdings(
+            "COP",
+            Shares(Decimal::new(-4005, 0)),
+            Price(Decimal::new(6243, 2)),
+        );
+        manager.update_holdings(
+            "BKR",
+            Shares(Decimal::new(10527, 0)),
+            Price(Decimal::new(2368, 2)),
+        );
+        manager.update_holdings(
+            "APA",
+            Shares(Decimal::new(-24754, 0)),
+            Price(Decimal::new(2033, 2)),
+        );
+        manager.update_cash(Decimal::new(99283298, 2));
+        assert_eq!(manager.long_market_exposure(), Decimal::new(124605062, 2));
+        assert_eq!(manager.short_market_exposure(), Decimal::new(125460125, 2));
+        assert_eq!(manager.gross_market_exposure(), Decimal::new(250065187, 2));
+        assert_eq!(manager.net_market_exposure(), Decimal::new(-855063, 2));
+        assert_eq!(manager.equity(), Decimal::new(98428235, 2));
+        assert_eq!(manager.initial_margin(), Decimal::new(1250325935, 3));
+        assert_eq!(manager.maintenance_margin(), Decimal::new(750195561, 3));
+        assert_eq!(manager.buying_power(), Decimal::new(149100605, 2));
+    }
+
+    #[test]
     fn equity_calculations() {
         let mut manager = RiskManager {
             kafka_consumer: None,
@@ -274,6 +354,8 @@ mod test {
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
             redis: None,
+            last_equity: Decimal::ZERO,
+            last_maintenance_margin: Decimal::ZERO,
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
@@ -339,6 +421,8 @@ mod test {
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
             redis: None,
+            last_equity: Decimal::ZERO,
+            last_maintenance_margin: Decimal::ZERO,
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
