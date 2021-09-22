@@ -114,7 +114,7 @@ impl RiskManager {
         self.holdings
             .entry(ticker.to_string())
             .and_modify(|(s, p)| {
-                *s = shares;
+                *s = Shares(s.0 + shares.0);
                 *p = price
             })
             .or_insert((shares, price));
@@ -277,21 +277,57 @@ mod test {
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
+        manager.update_cash(Decimal::new(300, 0));
+        assert_eq!(manager.long_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.short_market_exposure(), Decimal::ZERO);
+        assert_eq!(manager.gross_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.net_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.equity(), Decimal::new(400, 0));
+        assert_eq!(manager.initial_margin(), Decimal::new(50, 0));
+        assert_eq!(manager.maintenance_margin(), Decimal::new(30, 0));
+        assert_eq!(manager.buying_power(), Decimal::new(350, 0));
+
         manager.update_holdings(
             "TSLA",
             Shares(Decimal::new(-2, 0)),
             Price(Decimal::new(80, 0)),
         );
-        manager.update_cash(Decimal::new(300, 0));
-
         assert_eq!(manager.long_market_exposure(), Decimal::new(100, 0));
         assert_eq!(manager.short_market_exposure(), Decimal::new(160, 0));
         assert_eq!(manager.gross_market_exposure(), Decimal::new(260, 0));
         assert_eq!(manager.net_market_exposure(), Decimal::new(-60, 0));
-        assert_eq!(manager.equity(), Decimal::new(240, 0));
+        assert_eq!(manager.equity(), Decimal::new(400, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(130, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(78, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(110, 0));
+        assert_eq!(manager.buying_power(), Decimal::new(270, 0));
+
+        manager.update_holdings(
+            "TSLA",
+            Shares(Decimal::new(-1, 0)),
+            Price(Decimal::new(100, 0)),
+        );
+        assert_eq!(manager.long_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.short_market_exposure(), Decimal::new(300, 0));
+        assert_eq!(manager.gross_market_exposure(), Decimal::new(400, 0));
+        assert_eq!(manager.net_market_exposure(), Decimal::new(-200, 0));
+        assert_eq!(manager.equity(), Decimal::new(360, 0));
+        assert_eq!(manager.initial_margin(), Decimal::new(200, 0));
+        assert_eq!(manager.maintenance_margin(), Decimal::new(120, 0));
+        assert_eq!(manager.buying_power(), Decimal::new(160, 0));
+
+        manager.update_holdings(
+            "TSLA",
+            Shares(Decimal::new(3, 0)),
+            Price(Decimal::new(90, 0)),
+        );
+        assert_eq!(manager.long_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.short_market_exposure(), Decimal::ZERO);
+        assert_eq!(manager.gross_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.net_market_exposure(), Decimal::new(100, 0));
+        assert_eq!(manager.equity(), Decimal::new(390, 0));
+        assert_eq!(manager.initial_margin(), Decimal::new(50, 0));
+        assert_eq!(manager.maintenance_margin(), Decimal::new(30, 0));
+        assert_eq!(manager.buying_power(), Decimal::new(340, 0));
     }
 
     #[test]
