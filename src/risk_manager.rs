@@ -29,6 +29,7 @@ pub struct RiskManager {
 #[serde(rename_all = "snake_case")]
 pub enum DenyReason {
     InsufficientBuyingPower { buying_power: Decimal },
+    ChangeInPositionSide,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -211,16 +212,20 @@ impl RiskManager {
         debug!("Running risk_check");
         let owned_shares = self.holdings.get(&trade_intent.ticker);
         if let Some((shares, _)) = owned_shares {
-            if Decimal::from_isize(trade_intent.qty)
-                .expect("Failed to convert isize to Decimal")
-                .signum()
-                * shares.0.signum()
-                == Decimal::new(-1, 0)
-            {
-                // This is a closing trade, which should always be granted
-                return RiskCheckResponse::Granted {
-                    intent: trade_intent.clone(),
-                };
+            let qty =
+                Decimal::from_isize(trade_intent.qty).expect("Failed to convert isize to Decimal");
+            if (qty.signum() * shares.0.signum()) == Decimal::new(-1, 0) {
+                // This is a closing trade
+                if qty.abs() > shares.0.abs() {
+                    return RiskCheckResponse::Denied {
+                        intent: trade_intent.clone(),
+                        reason: DenyReason::ChangeInPositionSide,
+                    };
+                } else {
+                    return RiskCheckResponse::Granted {
+                        intent: trade_intent.clone(),
+                    };
+                }
             }
         }
         let required_buying_power = match trade_intent.order_type {
@@ -333,8 +338,20 @@ mod test {
             }
         );
 
-        let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
-            limit_price: Decimal::new(-120, 0),
+        let trade_intent = TradeIntent::new("AAPL", -2).order_type(OrderType::Limit {
+            limit_price: Decimal::new(120, 0),
+        });
+        let response = manager.risk_check(&trade_intent);
+        assert_eq!(
+            response,
+            RiskCheckResponse::Denied {
+                intent: trade_intent,
+                reason: DenyReason::ChangeInPositionSide
+            }
+        );
+
+        let trade_intent = TradeIntent::new("AAPL", -1).order_type(OrderType::Limit {
+            limit_price: Decimal::new(120, 0),
         });
         let response = manager.risk_check(&trade_intent);
         assert_eq!(
@@ -342,6 +359,6 @@ mod test {
             RiskCheckResponse::Granted {
                 intent: trade_intent,
             }
-        );
+        )
     }
 }
