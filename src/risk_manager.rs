@@ -210,7 +210,7 @@ impl RiskManager {
     }
 
     pub fn regt_buying_power(&self) -> Decimal {
-        ((self.equity() - self.initial_margin()) * self.multiplier()).max(Decimal::ZERO)
+        ((self.equity() - self.initial_margin()) * Decimal::new(2, 0)).max(Decimal::ZERO)
     }
 
     pub fn daytrading_buying_power(&self) -> Decimal {
@@ -294,7 +294,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn equity_calculations2() {
+    fn realistic_equity_calculations() {
         let mut manager = RiskManager {
             kafka_consumer: None,
             alpaca_client: None,
@@ -354,6 +354,11 @@ mod test {
         assert_eq!(manager.equity(), Decimal::new(98428235, 2));
         assert_eq!(manager.initial_margin(), Decimal::new(1250325935, 3));
         assert_eq!(manager.maintenance_margin(), Decimal::new(750195561, 3));
+        assert_eq!(manager.regt_buying_power(), Decimal::ZERO);
+        assert_eq!(
+            manager.daytrading_buying_power(),
+            Decimal::new(149100605, 2)
+        );
         assert_eq!(manager.buying_power(), Decimal::new(149100605, 2));
     }
 
@@ -379,7 +384,9 @@ mod test {
         assert_eq!(manager.equity(), Decimal::new(400, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(50, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(30, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(350, 0));
+        assert_eq!(manager.regt_buying_power(), Decimal::new(700, 0));
+        assert_eq!(manager.daytrading_buying_power(), Decimal::ZERO);
+        assert_eq!(manager.buying_power(), Decimal::new(700, 0));
 
         manager.update_holdings(
             "TSLA",
@@ -393,7 +400,9 @@ mod test {
         assert_eq!(manager.equity(), Decimal::new(400, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(130, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(78, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(270, 0));
+        assert_eq!(manager.regt_buying_power(), Decimal::new(540, 0));
+        assert_eq!(manager.daytrading_buying_power(), Decimal::ZERO);
+        assert_eq!(manager.buying_power(), Decimal::new(540, 0));
 
         manager.update_holdings(
             "TSLA",
@@ -407,7 +416,9 @@ mod test {
         assert_eq!(manager.equity(), Decimal::new(360, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(200, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(120, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(160, 0));
+        assert_eq!(manager.regt_buying_power(), Decimal::new(320, 0));
+        assert_eq!(manager.daytrading_buying_power(), Decimal::ZERO);
+        assert_eq!(manager.buying_power(), Decimal::new(320, 0));
 
         manager.update_holdings(
             "TSLA",
@@ -421,7 +432,9 @@ mod test {
         assert_eq!(manager.equity(), Decimal::new(390, 0));
         assert_eq!(manager.initial_margin(), Decimal::new(50, 0));
         assert_eq!(manager.maintenance_margin(), Decimal::new(30, 0));
-        assert_eq!(manager.buying_power(), Decimal::new(340, 0));
+        assert_eq!(manager.regt_buying_power(), Decimal::new(680, 0));
+        assert_eq!(manager.daytrading_buying_power(), Decimal::ZERO);
+        assert_eq!(manager.buying_power(), Decimal::new(680, 0));
     }
 
     #[test]
@@ -457,7 +470,7 @@ mod test {
         );
 
         let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
-            limit_price: Decimal::new(120, 0),
+            limit_price: Decimal::new(240, 0),
         });
         let response = manager.risk_check(&trade_intent).unwrap();
         assert_eq!(
@@ -465,7 +478,7 @@ mod test {
             RiskCheckResponse::Denied {
                 intent: trade_intent,
                 reason: DenyReason::InsufficientBuyingPower {
-                    buying_power: Decimal::new(110, 0)
+                    buying_power: Decimal::new(220, 0)
                 }
             }
         );

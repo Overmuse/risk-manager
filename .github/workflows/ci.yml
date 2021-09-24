@@ -116,7 +116,7 @@ jobs:
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --version 0.18.0-alpha3
       - name: Generate coverage
-        run: RUST_LOG=trace cargo tarpaulin --out Xml --avoid-cfg-tarpaulin
+        run: RUST_LOG=risk_manager=trace cargo tarpaulin --out Xml --avoid-cfg-tarpaulin
       - name: Upload to codecov
         uses: codecov/codecov-action@v1
         with:

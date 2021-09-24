@@ -39,7 +39,7 @@ jobs:
       - name: Initiate kafka
         run: ./scripts/init_kafka.sh
       - name: Run tests 
-        run: cargo test 
+        run: RUST_LOG=risk_manager=trace cargo test 
 
   build:
     name: Build and push to registry
