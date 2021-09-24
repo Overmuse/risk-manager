@@ -1,6 +1,6 @@
 use crate::redis::Redis;
 use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use num_traits::sign::Signed;
 use rdkafka::consumer::StreamConsumer;
 use rust_decimal::prelude::*;
@@ -224,29 +224,33 @@ impl RiskManager {
     }
 
     #[tracing::instrument(skip(self, trade_intent), fields(id = %trade_intent.id))]
-    pub fn risk_check(&self, trade_intent: &TradeIntent) -> RiskCheckResponse {
+    pub fn risk_check(&self, trade_intent: &TradeIntent) -> Result<RiskCheckResponse> {
         debug!("Running risk_check");
         let owned_shares = self.holdings.get(&trade_intent.ticker);
         if let Some((shares, _)) = owned_shares {
-            let qty =
-                Decimal::from_isize(trade_intent.qty).expect("Failed to convert isize to Decimal");
+            let qty = Decimal::from_isize(trade_intent.qty)
+                .context("Failed to convert isize to Decimal")?;
             if (qty.signum() * shares.0.signum()) == Decimal::new(-1, 0) {
                 // This is a closing trade
                 if qty.abs() > shares.0.abs() {
-                    return RiskCheckResponse::Denied {
+                    trace!("Change in position, risk check denied");
+                    return Ok(RiskCheckResponse::Denied {
                         intent: trade_intent.clone(),
                         reason: DenyReason::ChangeInPositionSide,
-                    };
+                    });
                 } else {
-                    return RiskCheckResponse::Granted {
+                    trace!("Closing trade, risk check granted");
+                    return Ok(RiskCheckResponse::Granted {
                         intent: trade_intent.clone(),
-                    };
+                    });
                 }
             }
         }
         let required_buying_power = match trade_intent.order_type {
             OrderType::Limit { limit_price } => {
-                limit_price * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
+                limit_price
+                    * Decimal::from_isize(trade_intent.qty.abs())
+                        .context("Failed to convert isize to Decimal")?
             }
             OrderType::Market => {
                 let price = self
@@ -254,25 +258,33 @@ impl RiskManager {
                     .as_ref()
                     .expect("Redis client not bound")
                     .get_latest_price(&trade_intent.ticker)
-                    .expect("Failed to get latest price")
-                    .expect("Missing price");
-                price * Decimal::new(103, 2) * Decimal::from_isize(trade_intent.qty.abs()).unwrap()
+                    .context("Failed to get latest price")?
+                    .ok_or_else(|| anyhow!("Missing price"))?;
+                price
+                    * Decimal::new(103, 2)
+                    * Decimal::from_isize(trade_intent.qty.abs())
+                        .context("Failed to convert isize to Decimal")?
             }
-            _ => unimplemented!(),
+            _ => {
+                return Err(anyhow!(
+                    "Risk manager can only deal with Market and Limit orders currently"
+                ))
+            }
         };
         let buying_power = self.buying_power();
+        trace!(?buying_power, ?required_buying_power);
 
         if buying_power > required_buying_power {
             debug!("Risk-check granted");
-            RiskCheckResponse::Granted {
+            Ok(RiskCheckResponse::Granted {
                 intent: trade_intent.clone(),
-            }
+            })
         } else {
-            debug!("Risk-check denied");
-            RiskCheckResponse::Denied {
+            debug!("Insufficient buying power, risk check denied");
+            Ok(RiskCheckResponse::Denied {
                 intent: trade_intent.clone(),
                 reason: DenyReason::InsufficientBuyingPower { buying_power },
-            }
+            })
         }
     }
 }
@@ -436,7 +448,7 @@ mod test {
         let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
             limit_price: Decimal::new(100, 0),
         });
-        let response = manager.risk_check(&trade_intent);
+        let response = manager.risk_check(&trade_intent).unwrap();
         assert_eq!(
             response,
             RiskCheckResponse::Granted {
@@ -447,7 +459,7 @@ mod test {
         let trade_intent = TradeIntent::new("AAPL", 1).order_type(OrderType::Limit {
             limit_price: Decimal::new(120, 0),
         });
-        let response = manager.risk_check(&trade_intent);
+        let response = manager.risk_check(&trade_intent).unwrap();
         assert_eq!(
             response,
             RiskCheckResponse::Denied {
@@ -461,7 +473,7 @@ mod test {
         let trade_intent = TradeIntent::new("AAPL", -2).order_type(OrderType::Limit {
             limit_price: Decimal::new(120, 0),
         });
-        let response = manager.risk_check(&trade_intent);
+        let response = manager.risk_check(&trade_intent).unwrap();
         assert_eq!(
             response,
             RiskCheckResponse::Denied {
@@ -473,7 +485,7 @@ mod test {
         let trade_intent = TradeIntent::new("AAPL", -1).order_type(OrderType::Limit {
             limit_price: Decimal::new(120, 0),
         });
-        let response = manager.risk_check(&trade_intent);
+        let response = manager.risk_check(&trade_intent).unwrap();
         assert_eq!(
             response,
             RiskCheckResponse::Granted {
