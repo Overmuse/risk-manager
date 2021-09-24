@@ -10,15 +10,15 @@ pub struct AlpacaSettings {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RedisSettings {
-    pub url: String,
+pub struct DatastoreSettings {
+    pub base_url: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub alpaca: AlpacaSettings,
     pub kafka: KafkaSettings,
-    pub redis: RedisSettings,
+    pub datastore: DatastoreSettings,
 }
 
 impl Settings {

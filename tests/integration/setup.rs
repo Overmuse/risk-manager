@@ -113,6 +113,7 @@ pub async fn setup() -> (
         std::env::set_var("ALPACA__BASE_URL", mockito::server_url());
         std::env::set_var("ALPACA__KEY_ID", "APCA_API_KEY_ID");
         std::env::set_var("ALPACA__SECRET_KEY", "APCA_API_SECRET_KEY");
+        std::env::set_var("DATASTORE__BASE_URL", "");
         let settings = Settings::new();
         tracing::debug!("{:?}", settings);
         let res = run(settings.unwrap()).await;
