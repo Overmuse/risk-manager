@@ -1,6 +1,6 @@
 [package]
 name = "risk-manager"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,6 +15,7 @@ kafka-settings = {git = "ssh://git@github.com/Overmuse/kafka-settings.git", tag 
 num-traits = "0.2.14"
 rdkafka = { version = "0.26", features = ["ssl-vendored"] }
 redis = { version = "0.19.0", features = ["aio", "tokio-comp"] }
+reqwest = { version = "0.11.4", features = ["blocking"] }
 rust_decimal = "1.14"
 serde = "1.0"
 serde_json = "1.0"

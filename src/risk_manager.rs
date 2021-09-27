@@ -1,4 +1,3 @@
-use crate::redis::Redis;
 use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
 use anyhow::{anyhow, Context, Result};
 use num_traits::sign::Signed;
@@ -22,9 +21,9 @@ pub struct RiskManager {
     cash: Decimal,
     holdings: HashMap<String, (Shares, Price)>,
     is_pattern_day_trader: bool,
-    redis: Option<Redis>,
     last_equity: Decimal,
     last_maintenance_margin: Decimal,
+    datastore_url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -47,16 +46,16 @@ pub enum RiskCheckResponse {
 }
 
 impl RiskManager {
-    pub fn new() -> Self {
+    pub fn new(datastore_url: String) -> Self {
         Self {
             kafka_consumer: None,
             alpaca_client: None,
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: false,
-            redis: None,
             last_equity: Decimal::ZERO,
             last_maintenance_margin: Decimal::ZERO,
+            datastore_url,
         }
     }
 
@@ -89,10 +88,6 @@ impl RiskManager {
 
     pub fn bind_consumer(&mut self, consumer: StreamConsumer) {
         self.kafka_consumer = Some(consumer)
-    }
-
-    pub fn bind_redis(&mut self, redis: Redis) {
-        self.redis = Some(redis)
     }
 
     #[tracing::instrument(skip(self, cash))]
@@ -253,13 +248,8 @@ impl RiskManager {
                         .context("Failed to convert isize to Decimal")?
             }
             OrderType::Market => {
-                let price = self
-                    .redis
-                    .as_ref()
-                    .expect("Redis client not bound")
-                    .get_latest_price(&trade_intent.ticker)
-                    .context("Failed to get latest price")?
-                    .ok_or_else(|| anyhow!("Missing price"))?;
+                let url = format!("{}/last/{}", self.datastore_url, trade_intent.ticker);
+                let price: Decimal = reqwest::blocking::get(url).unwrap().json().unwrap();
                 price
                     * Decimal::new(103, 2)
                     * Decimal::from_isize(trade_intent.qty.abs())
@@ -301,9 +291,9 @@ mod test {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
-            redis: None,
             last_equity: Decimal::new(99791448, 2),
             last_maintenance_margin: Decimal::ZERO,
+            datastore_url: String::new(),
         };
 
         manager.update_holdings(
@@ -370,9 +360,9 @@ mod test {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
-            redis: None,
             last_equity: Decimal::ZERO,
             last_maintenance_margin: Decimal::ZERO,
+            datastore_url: String::new(),
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));
@@ -445,9 +435,9 @@ mod test {
             cash: Decimal::ZERO,
             holdings: HashMap::new(),
             is_pattern_day_trader: true,
-            redis: None,
             last_equity: Decimal::ZERO,
             last_maintenance_margin: Decimal::ZERO,
+            datastore_url: String::new(),
         };
 
         manager.update_holdings("AAPL", Shares(Decimal::ONE), Price(Decimal::new(100, 0)));

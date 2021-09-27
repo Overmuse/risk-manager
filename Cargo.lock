@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "risk-manager"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "alpaca",
  "anyhow",
@@ -1129,6 +1129,7 @@ dependencies = [
  "num-traits 0.2.14",
  "rdkafka",
  "redis",
+ "reqwest",
  "rust_decimal",
  "serde 1.0.130",
  "serde_json",
