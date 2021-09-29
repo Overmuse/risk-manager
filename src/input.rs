@@ -9,10 +9,18 @@ use trading_base::TradeIntent;
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
+pub enum State {
+    Open { next_close: usize },
+    Closed { next_open: usize },
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Input {
     Lot(Lot),
+    Time(State),
     TradeIntent(TradeIntent),
 }
 

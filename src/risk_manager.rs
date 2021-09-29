@@ -249,7 +249,7 @@ impl RiskManager {
             }
             OrderType::Market => {
                 let url = format!("{}/last/{}", self.datastore_url, trade_intent.ticker);
-                let price: Decimal = reqwest::blocking::get(url).unwrap().json().unwrap();
+                let price: Decimal = reqwest::blocking::get(url)?.json()?;
                 price
                     * Decimal::new(103, 2)
                     * Decimal::from_isize(trade_intent.qty.abs())
