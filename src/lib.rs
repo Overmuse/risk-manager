@@ -49,6 +49,15 @@ pub async fn run(settings: Settings) -> Result<()> {
                     Err(e) => error!(?e),
                 }
             }
+            input::Input::Time(input::State::Open { .. }) => (),
+            input::Input::Time(input::State::Closed { next_open }) => {
+                // Only want to shut down in post-market, not pre-market. We achieve this by
+                // checking if next open is at least 12 hours away.
+                if next_open > 60 * 60 * 12 {
+                    info!("Market closed, shutting down");
+                    return Ok(());
+                }
+            }
         }
     }
 }

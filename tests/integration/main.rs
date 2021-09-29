@@ -74,5 +74,18 @@ async fn main() {
         }
     );
 
+    // Send message to shut down risk-manager
+    let record = FutureRecord::to("time")
+        .key("")
+        .payload(r#"{"state":"closed","next_open":63000}"#);
+    producer
+        .send_result(record)
+        .map_err(|x| x.0)
+        .unwrap()
+        .await
+        .unwrap()
+        .map_err(|x| x.0)
+        .unwrap();
+
     teardown(&admin, &admin_options).await;
 }

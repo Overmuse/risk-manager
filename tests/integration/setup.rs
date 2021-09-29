@@ -35,6 +35,7 @@ pub async fn setup() -> (
                 NewTopic::new("lots", 1, TopicReplication::Fixed(1)),
                 NewTopic::new("risk-check-request", 1, TopicReplication::Fixed(1)),
                 NewTopic::new("risk-check-response", 1, TopicReplication::Fixed(1)),
+                NewTopic::new("time", 1, TopicReplication::Fixed(1)),
             ],
             &admin_options,
         )
@@ -103,7 +104,7 @@ pub async fn setup() -> (
             .create();
         std::env::set_var("KAFKA__BOOTSTRAP_SERVER", "localhost:9094");
         std::env::set_var("KAFKA__GROUP_ID", Uuid::new_v4().to_string());
-        std::env::set_var("KAFKA__INPUT_TOPICS", "lots,risk-check-request");
+        std::env::set_var("KAFKA__INPUT_TOPICS", "lots,risk-check-request,time");
         std::env::set_var("KAFKA__BOOTSTRAP_SERVERS", "localhost:9094");
         std::env::set_var("KAFKA__SECURITY_PROTOCOL", "PLAINTEXT");
         std::env::set_var("KAFKA__ACKS", "0");
