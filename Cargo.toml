@@ -16,13 +16,13 @@ num-traits = "0.2"
 rdkafka = { version = "0.26", features = ["ssl-vendored"] }
 redis = { version = "0.19", features = ["aio", "tokio-comp"] }
 reqwest = { version = "0.11", features = ["blocking"] }
-rust_decimal = "1.14"
+rust_decimal = "1.17"
 serde = "1.0"
 serde_json = "1.0"
 tokio = { version = "1.8", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
-trading-base = {git = "ssh://git@github.com/Overmuse/trading-base.git", tag = "v0.4.0" }
+trading-base = {git = "ssh://git@github.com/Overmuse/trading-base.git", tag = "v0.5.1" }
 uuid = "0.8"
 
 [dev-dependencies]
