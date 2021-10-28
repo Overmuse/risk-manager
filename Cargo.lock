@@ -1148,9 +1148,9 @@ checksum = "3e52c148ef37f8c375d49d5a73aa70713125b7f19095948a923f80afdeb22ec2"
 
 [[package]]
 name = "rust_decimal"
-version = "1.14.3"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01127cb8617e5e21bcf2e19b5eb48317735ca677f1d0a94833c21c331c446582"
+checksum = "353775f96a1f400edcca737f843cb201af3645912e741e64456a257c770173e8"
 dependencies = [
  "arrayvec",
  "num-traits 0.2.14",
@@ -1605,8 +1605,8 @@ dependencies = [
 
 [[package]]
 name = "trading-base"
-version = "0.4.0"
-source = "git+ssh://git@github.com/Overmuse/trading-base.git?tag=v0.4.0#222b1786170de106efc4f703ce1f382f0e5fda51"
+version = "0.5.1"
+source = "git+ssh://git@github.com/Overmuse/trading-base.git?tag=v0.5.1#bcba9bddfc3f3bbf1116ac76851e62eeafda4671"
 dependencies = [
  "chrono",
  "rust_decimal",
