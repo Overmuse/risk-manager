@@ -1,27 +1,14 @@
-name: Release
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  deploy:
-    name: Tag if new release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Read version number
-        id: read_toml
-        uses: SebRollen/toml-action@v1.0.0
-        with:
-          file: Cargo.toml
-          field: package.version
-      - name: Set tag env variable
-        run: echo IMAGE_TAG=v${{steps.read_toml.outputs.value}} >> $GITHUB_ENV
-      - uses: ncipollo/release-action@v1
-        continue-on-error: true
-        with:
-          allowUpdates: false
-          tag: ${{ env.IMAGE_TAG }}
-          token: ${{ secrets.GH_TOKEN }}
+ on:
+   push:
+     branches:
+       - main
+ name: release-please
+ jobs:
+   release-please:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: GoogleCloudPlatform/release-please-action@v2
+         with:
+           token: ${{ secrets.GH_TOKEN }}
+           release-type: rust
+           package-name: release-please-action
