@@ -1,7 +1,8 @@
-use alpaca::{rest::account::GetAccount, rest::positions::GetPositions, Client};
+use alpaca::{rest::account::GetAccount, rest::positions::GetPositions};
 use anyhow::{anyhow, Context, Result};
 use num_traits::sign::Signed;
 use rdkafka::consumer::StreamConsumer;
+use rest_client::Client;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -61,9 +62,9 @@ impl RiskManager {
 
     pub async fn initialize(&mut self) -> Result<()> {
         if let Some(client) = self.alpaca_client.as_ref() {
-            let account = client.send(GetAccount).await?;
+            let account = client.send(&GetAccount).await?;
             let holdings = client
-                .send(GetPositions)
+                .send(&GetPositions)
                 .await?
                 .into_iter()
                 .map(|pos| {

@@ -2,7 +2,7 @@ mod input;
 mod risk_manager;
 mod settings;
 pub use crate::risk_manager::{DenyReason, Price, RiskCheckResponse, RiskManager, Shares};
-use alpaca::Client;
+use alpaca::client_with_url;
 use anyhow::{anyhow, Result};
 pub use input::Lot;
 use kafka_settings::{consumer, producer};
@@ -14,16 +14,14 @@ pub async fn run(settings: Settings) -> Result<()> {
     info!("Running RiskManager");
     let consumer = consumer(&settings.kafka)?;
     let producer = producer(&settings.kafka)?;
-    let client = Client::new(
-        settings.alpaca.base_url,
-        settings.alpaca.key_id,
-        settings.alpaca.secret_key,
+    let client = client_with_url(
+        &settings.alpaca.base_url,
+        &settings.alpaca.key_id,
+        &settings.alpaca.secret_key,
     );
     let mut risk_manager = RiskManager::new(settings.datastore.base_url);
     risk_manager.bind_consumer(consumer);
-    if let Ok(client) = client {
-        risk_manager.bind_alpaca_client(client);
-    }
+    risk_manager.bind_alpaca_client(client);
     risk_manager.initialize().await?;
     loop {
         let message = risk_manager.receive_message().await?;
